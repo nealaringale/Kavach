@@ -2,6 +2,60 @@
 
 This guide is for a demo deployment. Do not upload real victim evidence to a public demo.
 
+## Deploy from GitHub Actions (recommended)
+
+The repository includes a manual workflow at **Actions → Deploy Kavach1930 to Google Cloud Run → Run workflow**. It is intentionally manual rather than automatically publishing a public app on every commit. It syncs the existing GitHub Actions secret `GEMINI_API_KEY` to Google Secret Manager, builds from the repository, and deploys to Cloud Run.
+
+### GitHub repository configuration
+
+Under **Settings → Secrets and variables → Actions**, add this repository secret:
+
+- `GEMINI_API_KEY`: your Gemini API key from Google AI Studio. Never put it in a source file or repository variable.
+
+Add these repository variables:
+
+- `GCP_PROJECT_ID`: your Google Cloud project ID.
+- `GCP_WIF_PROVIDER`: the full Workload Identity Provider resource name.
+- `GCP_DEPLOY_SERVICE_ACCOUNT`: service account impersonated by GitHub Actions.
+- `GCP_RUN_SERVICE_ACCOUNT`: service account used by the running Cloud Run service.
+- `GCP_REGION`: optional; defaults to `asia-south1`.
+- `GEMINI_MODEL`: optional; defaults to `gemini-3.8-flash`.
+
+### Configure Workload Identity Federation
+
+Use Workload Identity Federation instead of a long-lived Google service-account key. The following commands are a starting template; run them from an administrator-authenticated terminal and replace `YOUR_PROJECT_ID` and `YOUR_DEPLOY_SERVICE_ACCOUNT`.
+
+~~~bash
+gcloud config set project YOUR_PROJECT_ID
+gcloud services enable iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com
+
+PROJECT_NUMBER="$(gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)')"
+DEPLOY_SA="YOUR_DEPLOY_SERVICE_ACCOUNT"
+POOL="github-actions"
+PROVIDER="kavach-main"
+
+gcloud iam workload-identity-pools create "$POOL" --project=YOUR_PROJECT_ID --location=global --display-name="GitHub Actions"
+gcloud iam workload-identity-pools providers create-oidc "$PROVIDER" --project=YOUR_PROJECT_ID --location=global --workload-identity-pool="$POOL" --display-name="Kavach main branch" --issuer-uri="https://token.actions.githubusercontent.com" --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref" --attribute-condition="assertion.repository == 'nealaringale/Kavach' && assertion.ref == 'refs/heads/main'"
+
+gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" --project=YOUR_PROJECT_ID --role="roles/iam.workloadIdentityUser" --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL/attribute.repository/nealaringale/Kavach"
+~~~
+
+The provider resource name is:
+
+~~~text
+projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/providers/kavach-main
+~~~
+
+Use that exact resource format, with the real project number, as `GCP_WIF_PROVIDER`.
+
+The deploy service account needs permission to deploy Cloud Run from source, build and store the container, create/update the Gemini secret, bind access to that secret, and act as the runtime service account. Review and grant the minimum appropriate IAM roles for your project; these permissions are powerful. The runtime service account should receive only `roles/secretmanager.secretAccessor` for the `kavach-gemini-api-key` secret. See Google's [Workload Identity Federation guidance](https://github.com/google-github-actions/auth) and [Cloud Run secrets documentation](https://cloud.google.com/run/docs/configuring/services/secrets).
+
+### Deploy
+
+Open the repository's Actions tab, select **Deploy Kavach1930 to Google Cloud Run**, and click **Run workflow**. Keep `allow_unauthenticated` off by default. Enable public access only if a public judging URL is required and you have considered Gemini quota/cost abuse; an unauthenticated service is not a safe production deployment.
+
+Cloud Run/Cloud Build may require an enabled billing account. Gemini API's no-cost quota (where available) does not make Google Cloud hosting universally free. Check current limits and pricing before deployment.
+
 ## Architecture
 
 Browser → Streamlit on Cloud Run → Gemini API
