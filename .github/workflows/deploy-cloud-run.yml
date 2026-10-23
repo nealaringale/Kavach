@@ -1,0 +1,106 @@
+name: Deploy Kavach1930 to Google Cloud Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_unauthenticated:
+        description: "Make the demo publicly accessible (can expose Gemini quota to abuse)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: kavach1930-cloud-run-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Cloud Run service
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      GCP_RUN_SERVICE_ACCOUNT: ${{ vars.GCP_RUN_SERVICE_ACCOUNT }}
+      GCP_REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ALLOW_UNAUTHENTICATED: ${{ inputs.allow_unauthenticated }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$GCP_PROJECT_ID" || -z "$GCP_WIF_PROVIDER" || -z "$GCP_DEPLOY_SERVICE_ACCOUNT" || -z "$GCP_RUN_SERVICE_ACCOUNT" || -z "$GEMINI_API_KEY" ]]; then
+            echo "Missing GitHub repository variables or GEMINI_API_KEY secret. See GCP_DEPLOYMENT.md." >&2
+            exit 1
+          fi
+          echo "Deployment configuration is present. Secret values will not be printed."
+
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Store Gemini key in Secret Manager
+        shell: bash
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          secret_name="kavach-gemini-api-key"
+          if gcloud secrets describe "$secret_name" --project="$GCP_PROJECT_ID" >/dev/null 2>&1; then
+            printf '%s' "$GEMINI_API_KEY" | gcloud secrets versions add "$secret_name" --project="$GCP_PROJECT_ID" --data-file=-
+          else
+            printf '%s' "$GEMINI_API_KEY" | gcloud secrets create "$secret_name" --project="$GCP_PROJECT_ID" --replication-policy=automatic --data-file=-
+          fi
+          gcloud secrets add-iam-policy-binding "$secret_name" \
+            --project="$GCP_PROJECT_ID" \
+            --member="serviceAccount:$GCP_RUN_SERVICE_ACCOUNT" \
+            --role="roles/secretmanager.secretAccessor" \
+            --quiet
+          echo "Gemini API key stored in Secret Manager; the value was not printed."
+
+      - name: Compile Python files
+        run: python -m compileall -q app.py kavach_utils.py kavach_schema.py test_gemini.py tests
+
+      - name: Deploy to Cloud Run
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth_flag="--no-allow-unauthenticated"
+          if [[ "$ALLOW_UNAUTHENTICATED" == "true" ]]; then
+            auth_flag="--allow-unauthenticated"
+          fi
+          gcloud run deploy kavach1930 \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --source=. \
+            --service-account="$GCP_RUN_SERVICE_ACCOUNT" \
+            --set-env-vars="GEMINI_MODEL=$GEMINI_MODEL" \
+            --set-secrets="GEMINI_API_KEY=kavach-gemini-api-key:latest" \
+            "$auth_flag" \
+            --quiet
+          service_url="$(gcloud run services describe kavach1930 --project="$GCP_PROJECT_ID" --region="$GCP_REGION" --format='value(status.url)')"
+          echo "Cloud Run deployment completed."
+          echo "Service URL: $service_url"
+          if [[ "$ALLOW_UNAUTHENTICATED" != "true" ]]; then
+            echo "Service remains private. Use authenticated access for testing."
+          else
+            echo "WARNING: service is public. Monitor quota, usage, and abuse."
+          fi
