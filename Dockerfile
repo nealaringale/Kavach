@@ -16,4 +16,4 @@ USER 10001:10001
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "streamlit run app.py --server.address=0.0.0.0 --server.port=\${PORT:-8080} --server.headless=true"]
+CMD ["sh", "-c", "streamlit run app.py --server.address=0.0.0.0 --server.port=${PORT:-8080} --server.headless=true"]
