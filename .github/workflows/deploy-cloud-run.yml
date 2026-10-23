@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$GCP_PROJECT_ID" || -z "$GCP_WIF_PROVIDER" || -z "$GCP_DEPLOY_SERVICE_ACCOUNT" || -z "$GCP_RUN_SERVICE_ACCOUNT" || -z "$GEMINI_API_KEY" ]]; then
-            echo "Missing GitHub repository variables or GEMINI_API_KEY or GOOGLE_API_KEY secret. See GCP_DEPLOYMENT.md." >&2
+            echo "Missing GitHub repository variables or Gemini API secret (GEMINI_API_KEY or GOOGLE_API_KEY). See GCP_DEPLOYMENT.md." >&2
             exit 1
           fi
           echo "Deployment configuration is present. Secret values will not be printed."
