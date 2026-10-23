@@ -7,6 +7,48 @@ import re
 from typing import Any
 
 
+# These local patterns reduce exposure, but cannot identify every kind of PII.
+_PAN_PATTERN = re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b", re.IGNORECASE)
+_EMAIL_PATTERN = re.compile(
+    r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+    re.IGNORECASE,
+)
+_INDIAN_PHONE_PATTERN = re.compile(
+    r"(?<!\d)(?:\+91[\s-]?)?[6-9]\d{9}(?!\d)"
+)
+_AADHAAR_LABELLED_PATTERN = re.compile(
+    r"\b(?:aadhaar|aadhar|uidai|uid)\s*(?:number|no\.?|#)?\s*[:\-]?\s*"
+    r"\d{4}[\s-]?\d{4}[\s-]?\d{4}\b",
+    re.IGNORECASE,
+)
+_ACCOUNT_LABELLED_PATTERN = re.compile(
+    r"\b(?:bank\s+)?account\s*(?:number|no\.?|#)\s*[:\-]?\s*"
+    r"\d{8,18}\b",
+    re.IGNORECASE,
+)
+_CARD_LABELLED_PATTERN = re.compile(
+    r"\b(?:card|debit card|credit card)\s*(?:number|no\.?|#)\s*[:\-]?\s*"
+    r"(?:\d[ -]?){13,19}\b",
+    re.IGNORECASE,
+)
+
+
+def redact_sensitive_data(text: str) -> str:
+    """Mask common Indian identifiers before sending evidence to Gemini.
+
+    This is conservative and intentionally does not redact every 12-digit
+    sequence because transaction references in the demo may also be 12 digits.
+    It is not a complete PII detector.
+    """
+    redacted = _PAN_PATTERN.sub("[REDACTED PAN]", text)
+    redacted = _EMAIL_PATTERN.sub("[REDACTED EMAIL]", redacted)
+    redacted = _AADHAAR_LABELLED_PATTERN.sub("[REDACTED AADHAAR]", redacted)
+    redacted = _ACCOUNT_LABELLED_PATTERN.sub("[REDACTED ACCOUNT NUMBER]", redacted)
+    redacted = _CARD_LABELLED_PATTERN.sub("[REDACTED CARD NUMBER]", redacted)
+    redacted = _INDIAN_PHONE_PATTERN.sub("[REDACTED PHONE]", redacted)
+    return redacted
+
+
 INJECTION_PATTERNS: dict[str, str] = {
     "Instruction override": (
         r"\bignore\s+(?:all\s+)?(?:previous|prior|earlier)\s+instructions\b"
