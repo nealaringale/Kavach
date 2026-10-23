@@ -10,12 +10,12 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from kavach_schema import KavachAnalysis
 from kavach_utils import (
-    as_text,
     detect_instruction_signals,
     is_exact_source_match,
     normalise_analysis,
-    parse_json_response,
+    redact_sensitive_data,
 )
 
 load_dotenv()
@@ -101,12 +101,14 @@ def analyse_evidence(evidence: str) -> dict:
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 response_mime_type="application/json",
+                response_schema=KavachAnalysis,
                 temperature=0.1,
             ),
         )
         if not response.text:
             raise ValueError("The model returned an empty response.")
-        parsed = parse_json_response(response.text)
+        # Validate the model's response against the shared typed output contract.
+        parsed = KavachAnalysis.model_validate_json(response.text).model_dump()
         return normalise_analysis(parsed)
     finally:
         client.close()
@@ -300,9 +302,13 @@ with analysis_tab:
         else:
             with st.spinner("Analyzing evidence with Gemini..."):
                 try:
-                    result = analyse_evidence(evidence)
+                    # Minimize accidental PII disclosure before any external API call.
+                    sanitized_evidence = redact_sensitive_data(evidence)
+                    result = analyse_evidence(sanitized_evidence)
                     st.session_state["analysis_result"] = result
                     st.session_state["analysis_source"] = evidence
+                    st.session_state["analysis_validation_source"] = sanitized_evidence
+                    st.session_state["redactions_applied"] = sanitized_evidence != evidence
                     st.session_state["draft_source"] = None
                 except Exception as exc:
                     st.error(
@@ -317,11 +323,19 @@ with analysis_tab:
 
     result = st.session_state.get("analysis_result")
     result_source = st.session_state.get("analysis_source", "")
+    validation_source = st.session_state.get("analysis_validation_source", result_source)
 
     if result:
         if evidence != result_source:
             st.info("The input has changed. Run analysis again to refresh the displayed results.")
         else:
+            if st.session_state.get("redactions_applied", False):
+                st.info(
+                    "Privacy minimization applied locally before the Gemini request. "
+                    "Common phone numbers, email addresses, PAN-like identifiers, and "
+                    "labelled Aadhaar/account/card numbers were masked. This heuristic "
+                    "does not detect every kind of personal information."
+                )
             signals = detect_instruction_signals(evidence)
             if signals:
                 st.warning(
@@ -329,7 +343,7 @@ with analysis_tab:
                     "This is a review signal, not proof of a successful attack or a guarantee "
                     "that the model ignored it."
                 )
-            render_analysis(result, result_source)
+            render_analysis(result, validation_source)
 
 with shield_tab:
     st.subheader("PromptShield — local pattern scanner")
