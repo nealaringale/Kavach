@@ -8,9 +8,9 @@ The repository includes a manual workflow at **Actions → Deploy Kavach1930 to 
 
 ### GitHub repository configuration
 
-Under **Settings → Secrets and variables → Actions**, add this repository secret:
+Under **Settings → Secrets and variables → Actions**, add one repository secret:
 
-- `GEMINI_API_KEY`: your Gemini API key from Google AI Studio. Never put it in a source file or repository variable.
+- `GEMINI_API_KEY` (preferred), or `GOOGLE_API_KEY`: your Gemini API key from Google AI Studio. Never put it in a source file or repository variable. The workflows accept either name.
 
 Add these repository variables:
 
