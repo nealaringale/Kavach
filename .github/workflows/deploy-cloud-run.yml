@@ -28,7 +28,7 @@ jobs:
       GCP_RUN_SERVICE_ACCOUNT: ${{ vars.GCP_RUN_SERVICE_ACCOUNT }}
       GCP_REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
       GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY }}
       ALLOW_UNAUTHENTICATED: ${{ inputs.allow_unauthenticated }}
 
     steps:
@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$GCP_PROJECT_ID" || -z "$GCP_WIF_PROVIDER" || -z "$GCP_DEPLOY_SERVICE_ACCOUNT" || -z "$GCP_RUN_SERVICE_ACCOUNT" || -z "$GEMINI_API_KEY" ]]; then
-            echo "Missing GitHub repository variables or GEMINI_API_KEY secret. See GCP_DEPLOYMENT.md." >&2
+            echo "Missing GitHub repository variables or GEMINI_API_KEY or GOOGLE_API_KEY secret. See GCP_DEPLOYMENT.md." >&2
             exit 1
           fi
           echo "Deployment configuration is present. Secret values will not be printed."
@@ -60,7 +60,7 @@ jobs:
       - name: Store Gemini key in Secret Manager
         shell: bash
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY }}
         run: |
           set -euo pipefail
           secret_name="kavach-gemini-api-key"
