@@ -98,7 +98,7 @@ def parse_json_response(text: str) -> dict[str, Any]:
             raise ValueError("The model returned invalid JSON.") from exc
 
     if not isinstance(parsed, dict):
-        raise ValueError("The model response must be a JSON object.")
+        raise TypeError("The model response must be a JSON object.")
     return parsed
 
 
