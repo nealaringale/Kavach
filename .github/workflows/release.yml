@@ -83,16 +83,11 @@ jobs:
           test -s "$archive"
           cat SHA256SUMS
 
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Prepare release notes
+        shell: bash
         run: |
-          gh release create "$RELEASE_TAG" \
-            "Kavach1930-${RELEASE_TAG}-source.zip" \
-            SHA256SUMS \
-            --title "Kavach1930 ${RELEASE_TAG}" \
-            --target "$GITHUB_SHA" \
-            --notes "## Kavach1930 ${RELEASE_TAG}
+          cat > release-notes.md <<'RELEASE_NOTES'
+          ## Kavach1930
 
           AI-assisted cyber-fraud evidence organizer and incident-report drafting prototype.
 
@@ -107,5 +102,16 @@ jobs:
           3. Copy `.env.example` to `.env` and set `GEMINI_API_KEY`.
           4. Start with `python -m streamlit run app.py`.
 
-          This is an educational prototype, not an official fraud verification or reporting service. Use fictional/sample data for demonstrations, review AI output, and never include API keys in the source. Real cyber-fraud victims in India should contact 1930 and cybercrime.gov.in."
+          This is an educational prototype, not an official fraud verification or reporting service. Use fictional/sample data for demonstrations, review AI output, and never include API keys in the source. Real cyber-fraud victims in India should contact 1930 and cybercrime.gov.in.
+          RELEASE_NOTES
 
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "Kavach1930-${RELEASE_TAG}-source.zip" \
+            SHA256SUMS \
+            --title "Kavach1930 ${RELEASE_TAG}" \
+            --target "$GITHUB_SHA" \
+            --notes-file release-notes.md
