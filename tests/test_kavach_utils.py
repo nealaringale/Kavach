@@ -7,6 +7,7 @@ from kavach_utils import (
     is_exact_source_match,
     normalise_analysis,
     parse_json_response,
+    redact_sensitive_data,
 )
 
 
@@ -59,3 +60,23 @@ def test_normalise_analysis_bounds_untrusted_model_output():
     assert len(result["warning_signs"][0]["title"]) == 180
     assert result["transactions"] == []
     assert result["missing_information"] == ["Need the date"]
+
+def test_redacts_common_pii_but_preserves_transaction_reference():
+    source = (
+        "Contact 9876543210 or user@example.com. "
+        "PAN ABCDE1234F. Aadhaar number: 1234 5678 9012. "
+        "Transaction reference: 123456789012."
+    )
+    redacted = redact_sensitive_data(source)
+    assert "9876543210" not in redacted
+    assert "user@example.com" not in redacted
+    assert "ABCDE1234F" not in redacted
+    assert "1234 5678 9012" not in redacted
+    assert "123456789012" in redacted
+
+
+def test_pii_redaction_does_not_change_ordinary_text():
+    source = "Caller demanded Rs 50,000 and threatened to arrest me."
+    assert redact_sensitive_data(source) == source
+
+
