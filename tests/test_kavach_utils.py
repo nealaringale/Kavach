@@ -38,7 +38,7 @@ def test_parse_json_fence():
 
 
 def test_rejects_json_array():
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         parse_json_response('["not", "an", "object"]')
 
 
