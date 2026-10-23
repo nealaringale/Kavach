@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# Keep the CI queue focused on the most recent commit for each branch.
+concurrency:
+  group: kavach-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     name: Validate application
