@@ -63,6 +63,25 @@ If your key or account cannot access the configured model, check available model
 
 For real financial cyber-fraud incidents, contact the national cybercrime helpline at **1930** and use the [National Cyber Crime Reporting Portal](https://cybercrime.gov.in/). This prototype does not replace official advice or reporting channels.
 
+## GitHub Actions
+
+Every push to `main` and pull request runs the automated quality pipeline:
+
+- Ruff lint checks.
+- Bandit static security analysis.
+- `pip-audit` against application dependencies.
+- Python compilation and unit tests.
+- Docker image build.
+- A small live Gemini API smoke test when the `GEMINI_API_KEY` repository secret is available. This makes one small API request per run; set the secret under **Settings → Secrets and variables → Actions**. The live test is skipped safely on runs without the secret.
+
+Configure an optional repository variable `GEMINI_MODEL` to override the default model.
+
+## Deploy with GitHub Actions and Google Cloud
+
+The manual workflow **Actions → Deploy Kavach1930 to Google Cloud Run** uses Workload Identity Federation and Secret Manager. It does not publish the service publicly by default. Deployment requires Google Cloud project/IAM configuration and these repository variables: `GCP_PROJECT_ID`, `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT`, and `GCP_RUN_SERVICE_ACCOUNT`. Optional variables: `GCP_REGION` and `GEMINI_MODEL`. The `GEMINI_API_KEY` repository secret is synced to Google Secret Manager during deployment.
+
+Follow [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) to set these up. Cloud Run/Cloud Build can incur charges; Gemini's free quota does not mean hosting is automatically free. Keep public access disabled unless a public judging URL is needed and you understand the quota/abuse risk.
+
 ## Engineering quality
 
 - Typed response contract: see [kavach_schema.py](kavach_schema.py).
