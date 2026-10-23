@@ -72,7 +72,7 @@ Every push to `main` and pull request runs the automated quality pipeline:
 - `pip-audit` against application dependencies.
 - Python compilation and unit tests.
 - Docker image build.
-- A small live Gemini API smoke test when the `GEMINI_API_KEY` repository secret is available. This makes one small API request per run; set the secret under **Settings → Secrets and variables → Actions**. The live test is skipped safely on runs without the secret.
+- A small live Gemini API smoke test when the `GEMINI_API_KEY` repository secret is available. This makes one small API request per run; set the secret under **Settings → Secrets and variables → Actions**. The live test is skipped safely on runs without either secret. Both `GEMINI_API_KEY` and `GOOGLE_API_KEY` are accepted; if you used the latter name, no rename is needed.
 
 Configure an optional repository variable `GEMINI_MODEL` to override the default model.
 
