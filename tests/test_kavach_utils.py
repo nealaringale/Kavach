@@ -1,7 +1,9 @@
 """Tests for Kavach1930's local deterministic helpers."""
 
 import pytest
+from pydantic import ValidationError
 
+from kavach_schema import KavachAnalysis
 from kavach_utils import (
     detect_instruction_signals,
     is_exact_source_match,
@@ -80,3 +82,46 @@ def test_pii_redaction_does_not_change_ordinary_text():
     assert redact_sensitive_data(source) == source
 
 
+
+def test_typed_schema_accepts_complete_analysis():
+    payload = {
+        "risk_level": "UNCERTAIN",
+        "assessment": "Evidence is insufficient for a confident assessment.",
+        "warning_signs": [],
+        "transactions": [],
+        "missing_information": ["Date not provided"],
+        "incident_summary": "User reports a suspicious call.",
+        "next_steps": ["Verify through an official channel."],
+    }
+    result = KavachAnalysis.model_validate(payload)
+    assert result.risk_level == "UNCERTAIN"
+    assert result.incident_summary == "User reports a suspicious call."
+
+
+def test_typed_schema_rejects_invalid_risk_and_extra_fields():
+    payload = {
+        "risk_level": "DEFINITELY_FRAUD",
+        "assessment": "Example",
+        "warning_signs": [],
+        "transactions": [],
+        "missing_information": [],
+        "incident_summary": "Example summary",
+        "next_steps": [],
+        "secret_field": "unexpected",
+    }
+    with pytest.raises(ValidationError):
+        KavachAnalysis.model_validate(payload)
+
+
+def test_typed_schema_enforces_summary_bound():
+    payload = {
+        "risk_level": "LOW",
+        "assessment": "Example",
+        "warning_signs": [],
+        "transactions": [],
+        "missing_information": [],
+        "incident_summary": "x" * 1501,
+        "next_steps": [],
+    }
+    with pytest.raises(ValidationError):
+        KavachAnalysis.model_validate(payload)
