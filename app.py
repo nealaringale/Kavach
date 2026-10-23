@@ -296,6 +296,15 @@ with analysis_tab:
     )
     st.caption(f"{len(evidence):,} / {MAX_EVIDENCE_CHARS:,} characters")
 
+    # Show precisely what will be sent after local redaction.
+    sanitized_preview = redact_sensitive_data(evidence)
+    with st.expander("Privacy preview: text sent to Gemini", expanded=False):
+        if sanitized_preview != evidence:
+            st.info("Common identifier patterns were masked locally.")
+        else:
+            st.caption("No configured PII patterns were detected; this does not mean the text is free of personal data.")
+        st.text(sanitized_preview or "Enter text to preview the minimized request.")
+
     if st.button("Analyze evidence", type="primary", use_container_width=True):
         if len(evidence.strip()) < 15:
             st.warning("Enter a little more text so the app has evidence to examine.")
@@ -303,7 +312,7 @@ with analysis_tab:
             with st.spinner("Analyzing evidence with Gemini..."):
                 try:
                     # Minimize accidental PII disclosure before any external API call.
-                    sanitized_evidence = redact_sensitive_data(evidence)
+                    sanitized_evidence = sanitized_preview
                     result = analyse_evidence(sanitized_evidence)
                     st.session_state["analysis_result"] = result
                     st.session_state["analysis_source"] = evidence
