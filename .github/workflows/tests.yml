@@ -18,7 +18,7 @@ jobs:
       # Configure GEMINI_MODEL under repository Variables to override this default.
       GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
       # An empty value is safe when a forked PR has no access to repository secrets.
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -51,7 +51,7 @@ jobs:
       - name: Test live Gemini API connection
         if: ${{ env.GEMINI_API_KEY != '' }}
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
         run: python test_gemini.py
 
