@@ -1,0 +1,111 @@
+name: Publish Kavach1930 GitHub Release
+
+on:
+  push:
+    branches:
+      - "release/v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag (for example v1.0.0)"
+        required: true
+        default: "v1.0.0"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  test-and-release:
+    name: Validate and publish release
+    runs-on: ubuntu-latest
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+      RELEASE_TAG_INPUT: ${{ inputs.tag_name }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install development dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements-dev.txt
+
+      - name: Lint application
+        run: python -m ruff check --select E4,E7,E9,F,B app.py kavach_utils.py kavach_schema.py test_gemini.py tests
+
+      - name: Static security scan
+        run: python -m bandit -q -r app.py kavach_utils.py kavach_schema.py test_gemini.py
+
+      - name: Audit runtime dependencies
+        run: python -m pip_audit -r requirements.txt
+
+      - name: Compile and run unit tests
+        run: |
+          python -m compileall -q app.py kavach_utils.py kavach_schema.py test_gemini.py tests
+          python -m pytest -q
+
+      - name: Test live Gemini connection when a key exists
+        if: ${{ env.GEMINI_API_KEY != '' }}
+        run: python test_gemini.py
+
+      - name: Build container image
+        run: docker build --tag kavach1930:release .
+
+      - name: Resolve release tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag="$RELEASE_TAG_INPUT"
+          else
+            tag="${GITHUB_REF_NAME#release/}"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]; then
+            echo "Invalid release tag: $tag (expected vMAJOR.MINOR.PATCH)" >&2
+            exit 1
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+
+      - name: Package source archive and checksum
+        shell: bash
+        run: |
+          archive="Kavach1930-${RELEASE_TAG}-source.zip"
+          git archive --format=zip --prefix="Kavach1930-${RELEASE_TAG}/" HEAD -o "$archive"
+          sha256sum "$archive" > SHA256SUMS
+          test -s "$archive"
+          cat SHA256SUMS
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "Kavach1930-${RELEASE_TAG}-source.zip" \
+            SHA256SUMS \
+            --title "Kavach1930 ${RELEASE_TAG}" \
+            --target "$GITHUB_SHA" \
+            --notes "## Kavach1930 ${RELEASE_TAG}
+
+          AI-assisted cyber-fraud evidence organizer and incident-report drafting prototype.
+
+          ### Included
+          - Source ZIP for the Streamlit app, tests, Dockerfile, and documentation
+          - SHA-256 checksum file for the source ZIP
+          - Automated lint, static security, dependency audit, unit tests, and container build
+
+          ### Run locally
+          1. Extract the ZIP and install Python 3.11 or newer.
+          2. Install dependencies with `python -m pip install -r requirements.txt`.
+          3. Copy `.env.example` to `.env` and set `GEMINI_API_KEY`.
+          4. Start with `python -m streamlit run app.py`.
+
+          This is an educational prototype, not an official fraud verification or reporting service. Use fictional/sample data for demonstrations, review AI output, and never include API keys in the source. Real cyber-fraud victims in India should contact 1930 and cybercrime.gov.in."
+
