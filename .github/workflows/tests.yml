@@ -32,7 +32,7 @@ jobs:
         run: python -m bandit -q -r app.py kavach_utils.py kavach_schema.py test_gemini.py
 
       - name: Dependency vulnerability audit
-        run: python -m pip_audit
+        run: python -m pip_audit -r requirements.txt
 
       - name: Compile Python files
         run: python -m compileall -q app.py kavach_utils.py kavach_schema.py test_gemini.py tests
