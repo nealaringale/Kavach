@@ -12,3 +12,5 @@ htmlcov
 !.env.example
 .streamlit/secrets.toml
 tests
+
+gha-creds-*.json
